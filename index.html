@@ -1,0 +1,2819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="智能健康分析系统 - 纯前端版本，支持PDF上传和AI分析">
+    <title>智能健康分析系统 | 纯前端版本</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Markdown解析 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --secondary: #10b981;
+            --accent: #8b5cf6;
+            --danger: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--background);
+        }
+        
+        .drop-zone {
+            border: 3px dashed #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        
+        .drop-zone:hover,
+        .drop-zone.dragover {
+            border-color: #0ea5e9;
+            background: #f0f9ff;
+        }
+        
+        .loading-spinner {
+            border: 3px solid #e2e8f0;
+            border-top-color: #0ea5e9;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3 {
+            color: #0ea5e9;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .markdown-body h1:first-child { margin-top: 0; }
+        .markdown-body ul, .markdown-body ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+        .markdown-body li { margin: 0.25rem 0; }
+        .markdown-body strong { color: #0ea5e9; }
+        .markdown-body p { margin: 0.5rem 0; line-height: 1.8; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <!-- 页面标题 -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-sky-500 to-violet-500 rounded-2xl mb-4 shadow-lg">
+                <span class="text-3xl">🏥</span>
+            </div>
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">智能健康分析系统</h1>
+            <p class="text-slate-500">上传PDF健康报告，AI智能分析为您提供专业解读</p>
+        </div>
+
+        <!-- API密钥配置 -->
+        <div class="bg-white rounded-2xl shadow-md p-6 mb-6 fade-in">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-2xl">🔑</span>
+                <h2 class="text-lg font-semibold text-slate-700">DeepSeek API 配置</h2>
+            </div>
+            <div class="flex gap-3">
+                <input 
+                    type="password" 
+                    id="apiKey" 
+                    placeholder="请输入您的 DeepSeek API 密钥 (sk-...)" 
+                    class="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
+                >
+                <button 
+                    onclick="saveApiKey()" 
+                    class="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors"
+                >
+                    保存
+                </button>
+            </div>
+            <p class="text-sm text-slate-400 mt-2">
+                💡 密钥仅保存在本地浏览器中，用于直接调用DeepSeek AI服务。系统不会收集您的密钥信息。
+                <a href="https://platform.deepseek.com/api_keys" target="_blank" class="text-sky-500 hover:underline">获取API密钥 →</a>
+            </p>
+        </div>
+
+        <!-- API密钥状态 -->
+        <div id="apiStatus" class="hidden mb-6">
+            <div class="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <span class="text-emerald-500">✓</span>
+                <span class="text-emerald-700 text-sm font-medium">API密钥已配置</span>
+            </div>
+        </div>
+
+        <!-- 主功能卡片 -->
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden fade-in">
+            <!-- 分析类型选择 -->
+            <div class="grid grid-cols-4 gap-3 p-4 border-b border-slate-100">
+                <button onclick="selectType('tmt')" data-type="tmt" class="type-btn active flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-sky-500 bg-sky-50 transition-all">
+                    <span class="text-2xl">🔍</span>
+                    <span class="text-sm font-medium text-slate-700">TMT热成像</span>
+                </button>
+                <button onclick="selectType('blood')" data-type="blood" class="type-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent hover:bg-slate-50 transition-all">
+                    <span class="text-2xl">🩸</span>
+                    <span class="text-sm font-medium text-slate-700">血液检测</span>
+                </button>
+                <button onclick="selectType('comprehensive')" data-type="comprehensive" class="type-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent hover:bg-slate-50 transition-all">
+                    <span class="text-2xl">📋</span>
+                    <span class="text-sm font-medium text-slate-700">报告解读</span>
+                </button>
+                <button onclick="selectType('consultation')" data-type="consultation" class="type-btn flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent hover:bg-slate-50 transition-all">
+                    <span class="text-2xl">💬</span>
+                    <span class="text-sm font-medium text-slate-700">健康问答</span>
+                </button>
+            </div>
+
+            <!-- 上传区域 -->
+            <div class="p-6">
+                <!-- 文件上传 -->
+                <div id="dropZone" class="drop-zone rounded-xl p-12 text-center cursor-pointer mb-4">
+                    <input type="file" id="fileInput" accept=".pdf" class="hidden">
+                    <div id="uploadPrompt">
+                        <div class="text-5xl mb-4">📄</div>
+                        <h3 class="text-lg font-semibold text-slate-700 mb-2">上传PDF健康报告</h3>
+                        <p class="text-slate-400 mb-4">将PDF文件拖拽到此处，或点击选择文件</p>
+                        <div class="flex justify-center gap-2">
+                            <span class="px-3 py-1 bg-slate-100 text-slate-500 text-sm rounded-full">PDF格式</span>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-500 text-sm rounded-full">最大10MB</span>
+                        </div>
+                    </div>
+                    <!-- 文件预览 -->
+                    <div id="filePreview" class="hidden">
+                        <div class="flex items-center justify-center gap-4">
+                            <span class="text-4xl">📄</span>
+                            <div class="text-left">
+                                <p id="fileName" class="font-medium text-slate-700"></p>
+                                <p id="fileSize" class="text-sm text-slate-400"></p>
+                            </div>
+                            <button onclick="removeFile(event)" class="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                                <span class="text-xl">✕</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PDF预览 -->
+                <div id="pdfPreview" class="hidden mb-4">
+                    <div class="bg-sky-50 rounded-xl p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-sky-700">📝 PDF文本预览</span>
+                            <button onclick="togglePdfPreview()" class="text-sm text-sky-500 hover:underline">收起</button>
+                        </div>
+                        <textarea id="pdfTextContent" readonly class="w-full h-32 p-3 text-sm border border-sky-200 rounded-lg bg-white resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"></textarea>
+                    </div>
+                </div>
+
+                <!-- 文本输入 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-600 mb-2">或直接输入报告内容：</label>
+                    <textarea 
+                        id="reportText" 
+                        class="w-full h-32 p-4 border border-slate-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
+                        placeholder="粘贴报告文本内容...
+
+例如：
+TMT热成像检查报告
+受检者：张先生 45岁
+检查所见：
+1. 头部热源分布不均，前额区温度略偏高
+2. 颈部热源偏低，提示颈椎问题
+3. 四肢末端温度较低"
+                    ></textarea>
+                    <p class="text-xs text-slate-400 mt-2">💡 同时上传PDF和输入文本时，将优先处理PDF文件</p>
+                </div>
+
+                <!-- 分析按钮 -->
+                <button 
+                    onclick="startAnalysis()" 
+                    id="analyzeBtn"
+                    disabled
+                    class="w-full py-4 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 disabled:from-slate-300 disabled:to-slate-400 text-white font-semibold rounded-xl transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25"
+                >
+                    <span>✨</span>
+                    <span id="btnText">开始AI智能分析</span>
+                </button>
+            </div>
+
+            <!-- 处理状态 -->
+            <div id="processingStatus" class="hidden border-t border-slate-100">
+                <div class="p-6 bg-slate-50">
+                    <div class="space-y-4">
+                        <!-- 步骤1 -->
+                        <div id="stepUpload" class="flex items-center gap-4 opacity-40">
+                            <div class="w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center">
+                                <span id="step1Icon">📤</span>
+                            </div>
+                            <div class="flex-1">
+                                <p id="step1Text" class="font-medium text-slate-600">上传文件中</p>
+                                <p id="step1Time" class="text-sm text-slate-400"></p>
+                            </div>
+                        </div>
+                        <!-- 步骤2 -->
+                        <div id="stepExtract" class="flex items-center gap-4 opacity-40">
+                            <div class="w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center">
+                                <span id="step2Icon">📝</span>
+                            </div>
+                            <div class="flex-1">
+                                <p id="step2Text" class="font-medium text-slate-600">提取文本内容</p>
+                                <p id="step2Time" class="text-sm text-slate-400"></p>
+                            </div>
+                        </div>
+                        <!-- 步骤3 -->
+                        <div id="stepAnalyze" class="flex items-center gap-4 opacity-40">
+                            <div class="w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center">
+                                <span id="step3Icon">🤖</span>
+                            </div>
+                            <div class="flex-1">
+                                <p id="step3Text" class="font-medium text-slate-600">AI智能分析中</p>
+                                <p id="step3Time" class="text-sm text-slate-400"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分析结果 -->
+            <div id="resultSection" class="hidden border-t border-slate-100">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-slate-700 flex items-center gap-2">
+                            <span>📊</span>
+                            <span>分析结果</span>
+                        </h3>
+                        <div class="flex gap-2">
+                            <button onclick="copyResult()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm rounded-lg transition-colors flex items-center gap-1">
+                                <span>📋</span>
+                                <span>复制</span>
+                            </button>
+                            <button onclick="resetAnalysis()" class="px-4 py-2 bg-sky-100 hover:bg-sky-200 text-sky-600 text-sm rounded-lg transition-colors flex items-center gap-1">
+                                <span>🔄</span>
+                                <span>重新分析</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <div class="bg-gradient-to-r from-sky-50 to-violet-50 px-4 py-3 border-b border-slate-100">
+                            <span class="text-sm font-medium text-slate-600">🤖 DeepSeek AI 分析报告</span>
+                        </div>
+                        <div id="resultContent" class="p-6 markdown-body text-slate-600 leading-relaxed"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <div class="mt-8 text-center">
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <p class="text-amber-700 text-sm">⚠️ 免责声明：本系统提供的分析结果仅供参考，不构成医疗诊断或治疗建议。如有健康问题，请咨询专业医疗人员。</p>
+            </div>
+            <p class="text-slate-400 text-sm">© 2024 智能健康分析系统 | 纯前端版本 | 数据保存在本地</p>
+        </div>
+    </div>
+
+    <!-- Toast通知 -->
+    <div id="toast" class="fixed top-4 right-4 px-6 py-3 rounded-xl shadow-lg transform translate-x-full transition-transform duration-300 z-50"></div>
+
+    <script>
+        // 全局变量
+        let selectedType = 'tmt';
+        let uploadedFile = null;
+        let pdfText = '';
+        let deepseekApiKey = '';
+
+        // 初始化PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApiKey();
+            initEventListeners();
+        });
+
+        // 初始化事件监听
+        function initEventListeners() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+
+            // 点击上传
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            // 文件选择
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+
+            // 拖拽上传
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    if (file.type === 'application/pdf') {
+                        handleFile(file);
+                    } else {
+                        showToast('请上传PDF文件', 'error');
+                    }
+                }
+            });
+        }
+
+        // 加载保存的API密钥
+        function loadApiKey() {
+            const savedKey = localStorage.getItem('deepseek_api_key');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+                deepseekApiKey = savedKey;
+                updateApiStatus(true);
+            }
+        }
+
+        // 保存API密钥
+        function saveApiKey() {
+            const key = document.getElementById('apiKey').value.trim();
+            if (!key) {
+                showToast('请输入API密钥', 'error');
+                return;
+            }
+            
+            // 验证密钥格式（简单验证）
+            if (!key.startsWith('sk-')) {
+                showToast('API密钥格式不正确，应以sk-开头', 'error');
+                return;
+            }
+            
+            localStorage.setItem('deepseek_api_key', key);
+            deepseekApiKey = key;
+            updateApiStatus(true);
+            showToast('API密钥已保存', 'success');
+        }
+
+        // 更新API状态显示
+        function updateApiStatus(hasKey) {
+            const statusEl = document.getElementById('apiStatus');
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            
+            if (hasKey && deepseekApiKey) {
+                statusEl.classList.remove('hidden');
+                analyzeBtn.disabled = false;
+            } else {
+                statusEl.classList.add('hidden');
+                analyzeBtn.disabled = true;
+            }
+        }
+
+        // 监听API密钥输入
+        document.getElementById('apiKey').addEventListener('input', (e) => {
+            deepseekApiKey = e.target.value.trim();
+            updateApiStatus(deepseekApiKey.length > 0);
+        });
+
+        // 选择分析类型
+        function selectType(type) {
+            selectedType = type;
+            document.querySelectorAll('.type-btn').forEach(btn => {
+                if (btn.dataset.type === type) {
+                    btn.classList.add('active', 'border-sky-500', 'bg-sky-50');
+                } else {
+                    btn.classList.remove('active', 'border-sky-500', 'bg-sky-50');
+                }
+            });
+        }
+
+        // 处理文件上传
+        async function handleFile(file) {
+            if (file.type !== 'application/pdf') {
+                showToast('请上传PDF格式文件', 'error');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('文件大小不能超过10MB', 'error');
+                return;
+            }
+
+            uploadedFile = file;
+            
+            // 显示文件预览
+            document.getElementById('uploadPrompt').classList.add('hidden');
+            document.getElementById('filePreview').classList.remove('hidden');
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            
+            // 开始提取PDF文本
+            extractPdfText(file);
+        }
+
+        // 移除文件
+        function removeFile(e) {
+            e.stopPropagation();
+            uploadedFile = null;
+            pdfText = '';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('uploadPrompt').classList.remove('hidden');
+            document.getElementById('filePreview').classList.add('hidden');
+            document.getElementById('pdfPreview').classList.add('hidden');
+            document.getElementById('pdfTextContent').value = '';
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // 提取PDF文本
+        async function extractPdfText(file) {
+            updateStep(1, 'active');
+            const startTime = Date.now();
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                updateStep(1, 'completed', Date.now() - startTime);
+                updateStep(2, 'active');
+                const extractStart = Date.now();
+                
+                let text = '';
+                const maxPages = Math.min(pdf.numPages, 20); // 限制最多处理20页
+                
+                for (let i = 1; i <= maxPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    const pageText = content.items.map(item => item.str).join(' ');
+                    text += pageText + '\n';
+                    
+                    // 更新进度
+                    const progress = Math.round((i / maxPages) * 100);
+                    document.getElementById('step2Text').textContent = `提取文本内容 ${progress}%`;
+                }
+                
+                pdfText = text.trim();
+                
+                // 显示PDF预览
+                document.getElementById('pdfPreview').classList.remove('hidden');
+                document.getElementById('pdfTextContent').value = pdfText;
+                
+                updateStep(2, 'completed', Date.now() - extractStart);
+                showToast('PDF文本提取成功', 'success');
+                
+            } catch (error) {
+                console.error('PDF提取错误:', error);
+                updateStep(1, 'error');
+                updateStep(2, 'error');
+                showToast('PDF解析失败：' + error.message, 'error');
+            }
+        }
+
+        // 更新步骤状态
+        function updateStep(stepNum, status, time) {
+            const stepEl = document.getElementById(`step${stepNum === 1 ? 'Upload' : stepNum === 2 ? 'Extract' : 'Analyze'}`);
+            const iconEl = document.getElementById(`step${stepNum}Icon`);
+            const textEl = document.getElementById(`step${stepNum}Text`);
+            const timeEl = document.getElementById(`step${stepNum}Time`);
+            
+            stepEl.classList.remove('opacity-40');
+            
+            if (status === 'active') {
+                stepEl.classList.add('pulse');
+                iconEl.textContent = '⏳';
+                textEl.textContent = textEl.textContent.replace('完成', '').replace('失败', '').trim();
+            } else if (status === 'completed') {
+                stepEl.classList.remove('pulse', 'text-red-500');
+                stepEl.classList.add('text-emerald-500');
+                iconEl.textContent = '✓';
+                textEl.textContent = textEl.textContent.split(' ')[0] + ' ' + textEl.textContent.split(' ')[1] + ' 完成';
+                if (time) timeEl.textContent = `耗时 ${formatTime(time)}`;
+            } else if (status === 'error') {
+                stepEl.classList.remove('pulse');
+                stepEl.classList.add('text-red-500');
+                iconEl.textContent = '✕';
+                textEl.textContent = textEl.textContent.split(' ')[0] + ' ' + textEl.textContent.split(' ')[1] + ' 失败';
+            }
+        }
+
+        // 格式化时间
+        function formatTime(ms) {
+            if (ms < 1000) return ms + 'ms';
+            return (ms / 1000).toFixed(1) + 's';
+        }
+
+        // 收起PDF预览
+        function togglePdfPreview() {
+            document.getElementById('pdfPreview').classList.add('hidden');
+        }
+
+        // 开始分析
+        async function startAnalysis() {
+            // 验证API密钥
+            if (!deepseekApiKey) {
+                showToast('请先配置DeepSeek API密钥', 'error');
+                document.getElementById('apiKey').focus();
+                return;
+            }
+
+            const text = pdfText || document.getElementById('reportText').value.trim();
+            
+            if (!text) {
+                showToast('请上传PDF文件或输入报告内容', 'error');
+                return;
+            }
+
+            // 显示处理状态
+            document.getElementById('processingStatus').classList.remove('hidden');
+            document.getElementById('resultSection').classList.add('hidden');
+            document.getElementById('analyzeBtn').disabled = true;
+            
+            // 重置步骤状态
+            document.getElementById('stepUpload').classList.add('opacity-40');
+            document.getElementById('stepUpload').classList.remove('pulse', 'text-red-500', 'text-emerald-500');
+            document.getElementById('stepUpload').querySelector('span:first-child').textContent = '📤';
+            document.getElementById('stepExtract').classList.add('opacity-40');
+            document.getElementById('stepExtract').classList.remove('pulse', 'text-red-500', 'text-emerald-500');
+            document.getElementById('stepExtract').querySelector('span:first-child').textContent = '📝';
+            
+            // 如果没有上传PDF，直接从步骤3开始
+            if (!uploadedFile) {
+                updateStep(1, 'completed', 0);
+                updateStep(2, 'completed', 0);
+            }
+            
+            updateStep(3, 'active');
+            const analyzeStart = Date.now();
+
+            try {
+                const analysisResult = await callDeepSeekAPI(text, selectedType);
+                
+                updateStep(3, 'completed', Date.now() - analyzeStart);
+                
+                // 显示结果
+                displayResult(analysisResult);
+                showToast('分析完成', 'success');
+                
+            } catch (error) {
+                updateStep(3, 'error');
+                console.error('分析错误:', error);
+                showToast(error.message || '分析失败，请检查API密钥', 'error');
+            } finally {
+                document.getElementById('analyzeBtn').disabled = false;
+            }
+        }
+
+        // 调用DeepSeek API
+        async function callDeepSeekAPI(text, analysisType) {
+            const typeNames = {
+                'tmt': 'TMT热成像分析',
+                'blood': '血液检测分析',
+                'comprehensive': '综合报告解读',
+                'consultation': '健康问答'
+            };
+            
+            const prompts = {
+                'tmt': `你是一位专业的中医体质分析师和健康顾问。请对以下TMT热成像检查报告进行深度分析。
+
+## 分析要求
+1. 根据热成像图分析身体各部位温度分布
+2. 识别热源异常区域，评估血液循环和代谢状态
+3. 给出中医体质判断和调理建议
+4. 根据检测结果匹配推荐我们的专业产品
+
+## 产品推荐知识库（重要！必须根据症状精准匹配推荐）
+| 产品名称 | 适用症状/触发关键词 | 产品功效 | 推荐话术示例 |
+|---------|-------------------|---------|-------------|
+| 金字塔 | 微循环差、糖尿病、高血压、能量不足、精神萎靡、心脑血管问题、代谢缓慢 | 提升能量、专门解决现代人的微循环问题，以及糖尿病、高血压、心脑血管疾病 | "监测到您的热成像显示XX部位热源偏低，这往往意味着局部的微循环障碍。基于此，我们建议使用【金字塔】，它专门用于解决此类微循环问题。" |
+| 气血针 | 淤滞、气血不通、手脚冰凉、局部疼痛、代谢缓慢、热源偏低、温度不均 | 打通身体气血循环、加速提升全身血气流通，改善身体气血不通、加速局部气血循环、快速代谢掉淤堵和凝滞的毒素 | "针对报告中的淤堵迹象，【气血针】能快速打通循环，加速毒素代谢，从根源解决'通则不痛'的问题。" |
+| 生命波 | 易感冒、体质虚弱、内分泌紊乱、激素失调、免疫力下降 | 增强免疫力、调节内分泌、稳定激素水平 | "针对您报告中反映的体质虚弱、易感冒倾向，匹配【生命波】。它不仅能增强您的免疫屏障，还能同步调节不稳定的激素水平。" |
+| 面部胶原灌注 | 皮肤干燥、皱纹、色斑、敏感、红肿、暗沉、缺水 | 深层补水、长效保湿、填充细纹、平滑肌肤、均匀肤色、提亮肌肤、抗炎舒缓、修复屏障 | "报告显示皮肤屏障受损。通过【面部胶原灌注】实现深层补水与抗炎修复，解决细纹与暗沉问题。" |
+| 头皮胶原灌注 | 脱发、白发、头皮屑、毛囊萎缩、发量减少、头发枯萎、头皮囊肿 | 激活毛囊干细胞、促进毛囊再生、促进血管再生、改善头皮血液循环、稳固基底层、改善生长环境 | "针对头皮血液循环不佳，通过【头皮胶原灌注】稳固基底层，激活毛囊干细胞，改善毛发生长环境。" |
+| 牙龈胶原灌注 | 牙龈萎缩、牙周炎、牙色异常、牙龈出血 | 改善牙龈局部微循环、为牙龈细胞提供充足营养与氧供、改善牙龈萎缩和炎症问题、恢复牙龈健康粉嫩色泽 | "改善口腔微循环，【牙龈胶原灌注】为牙龈细胞供氧，修复萎缩组织，重塑牙龈健康形态。" |
+| 私密胶原灌注 | 阴道松弛、干涩、妇科炎症、性功能障碍、私密部位免疫力下降 | 增强私密部位免疫力、建立天然防御屏障、清除妇科炎症、降低复发风险、促进私密部位组织修复和再生、延缓私密部位衰老 | "针对私密处免疫力下降与衰老，【私密胶原灌注】建立天然防御屏障，促进组织再生，延缓生殖系统衰老。" |
+
+## 报告内容
+${text}
+
+## 输出格式
+请按以下结构输出分析报告：
+### 一、热源分布分析
+详细分析各部位温度分布情况。
+
+### 二、体质类型判断
+根据热成像特征判断体质类型。
+
+### 三、健康问题识别
+识别报告中反映的健康问题。
+
+### 四、调理建议
+#### 🍽️ 饮食调理
+#### 🏃 运动建议
+#### 😴 作息调整
+
+### 五、产品推荐方案
+**重要：必须根据上方产品知识库，结合报告中的具体症状，精准匹配1-3个产品进行推荐。每个推荐需要：**
+1. 指出报告中的具体异常发现
+2. 解释为什么推荐该产品
+3. 说明产品如何针对性解决问题
+
+示例格式：
+> 📌 **推荐产品：【金字塔】**
+> 监测到您的TMT热成像显示颈部及背部热源偏低，这往往意味着局部的微循环障碍。基于此，我们建议使用【金字塔】，它专门用于解决此类微循环问题，可有效改善心脑血管及代谢类慢性风险。`,
+
+                'blood': `你是一位专业的医学检验分析师。请对以下血液检测报告进行深度分析。
+
+## 分析要求
+1. 解读各项血液指标数值
+2. 识别异常指标，评估健康风险
+3. 给出健康建议
+4. 根据检测结果匹配推荐我们的专业产品
+
+## 产品推荐知识库（重要！必须根据症状精准匹配推荐）
+| 产品名称 | 适用症状/触发关键词 | 产品功效 | 推荐话术示例 |
+|---------|-------------------|---------|-------------|
+| 金字塔 | 微循环差、糖尿病、高血压、血糖偏高、血脂异常、能量不足、心脑血管风险 | 提升能量、专门解决现代人的微循环问题，以及糖尿病、高血压、心脑血管疾病 | "您的血糖/血脂指标提示代谢能级下降，【金字塔】通过提升生物能量场，专门针对心脑血管及代谢类慢性风险提供微循环修复。" |
+| 气血针 | 血红蛋白低、贫血、血液粘稠、微循环障碍、代谢缓慢 | 打通身体气血循环、加速提升全身血气流通，改善身体气血不通、快速代谢掉淤堵和凝滞的毒素 | "针对报告中的血液循环问题，【气血针】能快速打通循环，加速毒素代谢，改善血液粘稠状态。" |
+| 生命波 | 白细胞异常、免疫指标低、易感冒、体质虚弱、内分泌紊乱、激素失调 | 增强免疫力、调节内分泌、稳定激素水平 | "您的免疫相关指标偏低，【生命波】可增强您的免疫屏障，同步调节内分泌平衡。" |
+| 面部胶原灌注 | 皮肤干燥、胶原蛋白流失、皱纹、色斑、敏感 | 深层补水、长效保湿、填充细纹、平滑肌肤、抗炎舒缓、修复屏障 | "通过【面部胶原灌注】实现深层补水与抗炎修复，解决细纹与暗沉问题。" |
+| 头皮胶原灌注 | 脱发、白发、头皮屑、毛囊萎缩、发量减少 | 激活毛囊干细胞、促进毛囊再生、改善头皮血液循环 | "通过【头皮胶原灌注】激活毛囊干细胞，改善毛发生长环境。" |
+| 牙龈胶原灌注 | 牙龈萎缩、牙周炎、牙色异常 | 改善牙龈局部微循环、改善牙龈萎缩和炎症问题 | "【牙龈胶原灌注】为牙龈细胞供氧，修复萎缩组织。" |
+| 私密胶原灌注 | 妇科炎症、私密部位免疫力下降、激素水平异常 | 增强私密部位免疫力、清除妇科炎症、促进组织修复 | "【私密胶原灌注】建立天然防御屏障，促进组织再生。" |
+
+## 报告内容
+${text}
+
+## 输出格式
+请按以下结构输出分析报告：
+### 一、指标解读
+逐项解读关键血液指标，标注正常/异常状态。
+
+### 二、异常分析
+重点分析异常指标的含义和可能原因。
+
+### 三、健康风险评估
+综合评估整体健康状况和风险等级。
+
+### 四、调理建议
+#### 🍽️ 饮食调理
+#### 🏃 运动建议
+#### 😴 作息调整
+
+### 五、产品推荐方案
+**重要：必须根据上方产品知识库，结合报告中的具体异常指标，精准匹配1-3个产品进行推荐。每个推荐需要：**
+1. 指出报告中的具体异常指标
+2. 解释该指标异常的健康影响
+3. 说明推荐产品如何针对性解决问题
+
+示例格式：
+> 📌 **推荐产品：【生命波】**
+> 您的白细胞计数偏低，提示免疫功能可能下降。【生命波】可增强您的免疫屏障，同步调节内分泌平衡，改善体质虚弱问题。`,
+
+                'comprehensive': `你是一位资深的健康管理专家，擅长解读各类体检报告。请对以下健康报告进行**数据驱动的系统性分析**。
+
+## 核心任务
+这是一份需要专业解读的体检报告。请帮助用户理解报告中的各项指标，重点关注：
+1. **异常指标识别**：找出所有偏离正常范围的指标
+2. **医学术语解释**：用通俗易懂的语言解释专业术语
+3. **健康风险评估**：基于数据分析潜在的健康风险
+4. **结构化建议**：根据报告数据给出针对性的生活方式调整建议
+5. **产品匹配推荐**：根据检测结果精准匹配我们的专业产品
+
+## 产品推荐知识库（重要！必须根据症状精准匹配推荐）
+| 产品名称 | 适用症状/触发关键词 | 产品功效 | 推荐话术示例 |
+|---------|-------------------|---------|-------------|
+| 金字塔 | 微循环差、糖尿病、高血压、能量不足、精神萎靡、心脑血管问题、代谢缓慢、血糖血脂异常 | 提升能量、专门解决现代人的微循环问题，以及糖尿病、高血压、心脑血管疾病 | "该指标提示身体代谢能级下降，【金字塔】通过提升生物能量场，专门针对心脑血管及代谢类慢性风险提供微循环修复。" |
+| 气血针 | 淤滞、气血不通、手脚冰凉、局部疼痛、代谢缓慢、血液粘稠、微循环障碍 | 打通身体气血循环、加速提升全身血气流通，改善身体气血不通、加速局部气血循环、快速代谢掉淤堵和凝滞的毒素 | "针对报告中的淤堵迹象，【气血针】能快速打通循环，加速毒素代谢，从根源解决'通则不痛'的问题。" |
+| 生命波 | 易感冒、体质虚弱、内分泌紊乱、激素失调、免疫力下降、白细胞异常 | 增强免疫力、调节内分泌、稳定激素水平 | "针对免疫与内分泌的双重失衡，【生命波】可双向调节激素水平，强化第一道免疫防线，改善虚弱体质。" |
+| 面部胶原灌注 | 皮肤干燥、皱纹、色斑、敏感、红肿、暗沉、缺水 | 深层补水、长效保湿、填充细纹、平滑肌肤、均匀肤色、提亮肌肤、抗炎舒缓、修复屏障 | "报告/主诉显示皮肤屏障受损。通过【面部胶原灌注】实现深层补水与抗炎修复，解决细纹与暗沉。" |
+| 头皮胶原灌注 | 脱发、白发、头皮屑、毛囊萎缩、发量减少、头发枯萎、头皮囊肿 | 激活毛囊干细胞、促进毛囊再生、促进血管再生、改善头皮血液循环、稳固基底层、改善生长环境 | "针对头皮血液循环不佳，通过【头皮胶原灌注】稳固基底层，激活毛囊干细胞，改善毛发生长环境。" |
+| 牙龈胶原灌注 | 牙龈萎缩、牙周炎、牙色异常、牙龈出血 | 改善牙龈局部微循环、为牙龈细胞提供充足营养与氧供、改善牙龈萎缩和炎症问题、恢复牙龈健康粉嫩色泽 | "改善口腔微循环，【牙龈胶原灌注】为牙龈细胞供氧，修复萎缩组织，重塑牙龈健康形态。" |
+| 私密胶原灌注 | 阴道松弛、干涩、妇科炎症、性功能障碍、私密部位免疫力下降 | 增强私密部位免疫力、建立天然防御屏障、清除妇科炎症、降低复发风险、促进私密部位组织修复和再生、延缓私密部位衰老 | "针对私密处免疫力下降与衰老，【私密胶原灌注】建立天然防御屏障，促进组织再生，延缓生殖系统衰老。" |
+
+## 报告内容
+${text}
+
+## 输出格式
+请按以下结构输出解读报告：
+### 一、报告概览
+简要说明这是什么类型的报告，包含哪些检查项目。
+
+### 二、指标解读
+逐项解读关键指标，标注正常/异常状态，解释每项指标的医学含义。
+
+### 三、异常指标分析
+重点分析异常指标，解释可能的原因和潜在影响。
+
+### 四、健康风险评估
+综合所有指标，评估整体健康状况和潜在风险等级。
+
+### 五、调理建议
+#### 🍽️ 饮食调理
+#### 🏃 运动建议
+#### 😴 作息调整
+
+### 六、产品推荐方案
+**重要：必须根据上方产品知识库，结合报告中的具体异常发现，精准匹配1-3个产品进行推荐。每个推荐需要：**
+1. 明确指出报告中的具体异常发现
+2. 解释该异常的健康影响
+3. 说明推荐产品如何针对性解决问题
+4. 使用专业且有说服力的推荐话术
+
+示例格式：
+> 📌 **推荐产品：【金字塔】**
+> 监测到您的报告显示微循环指标异常，这往往意味着身体代谢能级下降。基于此，我们建议使用【金字塔】，它通过提升生物能量场，专门针对心脑血管及代谢类慢性风险提供微循环修复。`,
+
+                'consultation': `你是一位专业的健康顾问，擅长解答具体的健康问题。请针对用户提出的**特定健康问题**提供实用建议。
+
+## 核心任务
+用户有具体的健康困扰或疑问，需要你提供：
+1. **问题理解**：准确理解用户的核心困扰
+2. **原因分析**：分析可能导致该问题的常见原因
+3. **解决方案**：提供具体、可操作的改善建议
+4. **产品匹配**：根据用户问题精准匹配我们的专业产品
+
+## 产品推荐知识库（重要！必须根据症状精准匹配推荐）
+| 产品名称 | 适用症状/触发关键词 | 产品功效 | 推荐话术示例 |
+|---------|-------------------|---------|-------------|
+| 金字塔 | 微循环差、糖尿病、高血压、能量不足、精神萎靡、疲劳乏力、手脚冰凉、头晕 | 提升能量、专门解决现代人的微循环问题，以及糖尿病、高血压、心脑血管疾病 | "根据您描述的症状，提示身体微循环可能存在问题。【金字塔】专门用于解决此类微循环问题，可有效改善能量不足和代谢缓慢。" |
+| 气血针 | 淤滞、气血不通、手脚冰凉、局部疼痛、肩颈酸痛、腰背疼痛、经络不通 | 打通身体气血循环、加速提升全身血气流通，改善身体气血不通、加速局部气血循环、快速代谢掉淤堵和凝滞的毒素 | "您提到的疼痛/不适症状，往往与气血淤滞有关。【气血针】能快速打通循环，加速毒素代谢，从根源解决'通则不痛'的问题。" |
+| 生命波 | 易感冒、体质虚弱、内分泌紊乱、激素失调、免疫力下降、月经不调、更年期症状 | 增强免疫力、调节内分泌、稳定激素水平 | "针对您反映的体质虚弱/内分泌问题，【生命波】可双向调节激素水平，强化免疫防线，改善虚弱体质。" |
+| 面部胶原灌注 | 皮肤干燥、皱纹、细纹、色斑、敏感肌、红肿、暗沉、缺水、皮肤松弛 | 深层补水、长效保湿、填充细纹、平滑肌肤、均匀肤色、提亮肌肤、抗炎舒缓、修复屏障 | "针对您的皮肤问题，【面部胶原灌注】可实现深层补水与抗炎修复，解决细纹与暗沉，恢复肌肤年轻态。" |
+| 头皮胶原灌注 | 脱发、掉发、白发、头皮屑、毛囊萎缩、发量减少、头发枯萎、头皮油腻 | 激活毛囊干细胞、促进毛囊再生、促进血管再生、改善头皮血液循环、稳固基底层 | "针对您的头发问题，【头皮胶原灌注】可激活毛囊干细胞，改善头皮血液循环，从根本改善毛发生长环境。" |
+| 牙龈胶原灌注 | 牙龈萎缩、牙周炎、牙龈出血、牙齿松动、牙色异常、口腔问题 | 改善牙龈局部微循环、为牙龈细胞提供充足营养与氧供、改善牙龈萎缩和炎症问题 | "针对您的口腔问题，【牙龈胶原灌注】可改善牙龈微循环，修复萎缩组织，重塑牙龈健康形态。" |
+| 私密胶原灌注 | 阴道松弛、干涩、妇科炎症、性生活不适、私密部位不适、漏尿 | 增强私密部位免疫力、建立天然防御屏障、清除妇科炎症、促进组织修复和再生 | "针对您的私密问题，【私密胶原灌注】可建立天然防御屏障，促进组织再生，从根本上改善私密健康。" |
+
+## 用户问题
+${text}
+
+## 输出格式
+请按以下结构回答：
+### 一、问题理解
+简要复述用户的问题，确认理解正确。
+
+### 二、原因分析
+分析可能导致该问题的常见原因（如生活习惯、饮食、压力等）。
+
+### 三、解决方案
+#### 🍽️ 饮食调整
+具体的饮食建议，包括推荐食用和应该避免的食物。
+
+#### 🏃 运动建议
+适合的运动类型、强度和频率。
+
+#### 😴 作息调整
+睡眠、休息相关的建议。
+
+#### 💡 其他生活习惯
+其他有助于改善问题的日常习惯。
+
+### 四、产品推荐方案
+**重要：必须根据上方产品知识库，结合用户描述的具体症状，精准匹配1-3个产品进行推荐。每个推荐需要：**
+1. 关联用户提到的具体症状
+2. 解释为什么推荐该产品
+3. 说明产品如何针对性解决用户的问题
+4. 使用专业且有说服力的推荐话术
+
+示例格式：
+> 📌 **推荐产品：【气血针】**
+> 您提到的肩颈酸痛症状，往往与局部气血淤滞有关。【气血针】能快速打通循环，加速局部气血流通，从根源解决"通则不痛"的问题，缓解您的不适症状。
+
+### 五、温馨提示
+提醒用户何时应该就医或寻求专业帮助。`
+            };
+
+            const prompt = prompts[analysisType] || prompts['comprehensive'];
+
+            const response = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${deepseekApiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: [{
+                        role: 'user',
+                        content: prompt
+                    }],
+                    temperature: 0.4,
+                    max_tokens: 4096
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                if (response.status === 401) {
+                    throw new Error('API密钥无效，请检查密钥是否正确');
+                } else if (response.status === 429) {
+                    throw new Error('API调用频率超限，请稍后再试');
+                } else if (response.status === 402) {
+                    throw new Error('API余额不足，请充值后再试');
+                } else {
+                    throw new Error(errorData.error?.message || 'API调用失败');
+                }
+            }
+
+            const data = await response.json();
+            
+            if (data.choices && data.choices.length > 0) {
+                return data.choices[0].message.content;
+            } else {
+                throw new Error('未能获取分析结果');
+            }
+        }
+
+        // 显示分析结果
+        function displayResult(text) {
+            const html = marked.parse(text);
+            document.getElementById('resultContent').innerHTML = html;
+            document.getElementById('resultSection').classList.remove('hidden');
+            document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // 复制结果
+        function copyResult() {
+            const text = document.getElementById('resultContent').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('已复制到剪贴板', 'success');
+            });
+        }
+
+        // 重新分析
+        function resetAnalysis() {
+            document.getElementById('processingStatus').classList.add('hidden');
+            document.getElementById('resultSection').classList.add('hidden');
+            document.getElementById('reportText').value = '';
+            removeFile({ stopPropagation: () => {} });
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        }
+
+        // 显示Toast通知
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const colors = {
+                success: 'bg-emerald-500',
+                error: 'bg-red-500',
+                info: 'bg-sky-500'
+            };
+            
+            toast.textContent = message;
+            toast.className = `fixed top-4 right-4 px-6 py-3 rounded-xl shadow-lg transform translate-x-full transition-transform duration-300 z-50 text-white font-medium ${colors[type]}`;
+            
+            // 显示
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full');
+            });
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+    </script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+</body>
+</html>
