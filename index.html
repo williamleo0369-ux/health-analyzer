@@ -91,45 +91,69 @@
 <body class="bg-slate-50 min-h-screen">
     <div class="max-w-4xl mx-auto px-4 py-8">
         <!-- 页面标题 -->
-        <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-sky-500 to-violet-500 rounded-2xl mb-4 shadow-lg">
-                <span class="text-3xl">🏥</span>
+        <div class="relative mb-8">
+            <div class="text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-sky-500 to-violet-500 rounded-2xl mb-4 shadow-lg">
+                    <span class="text-3xl">🏥</span>
+                </div>
+                <h1 class="text-3xl font-bold text-slate-800 mb-2">智能健康分析系统</h1>
+                <p class="text-slate-500">上传PDF健康报告，AI智能分析为您提供专业解读</p>
             </div>
-            <h1 class="text-3xl font-bold text-slate-800 mb-2">智能健康分析系统</h1>
-            <p class="text-slate-500">上传PDF健康报告，AI智能分析为您提供专业解读</p>
+            <!-- 设置按钮 -->
+            <button 
+                onclick="openSettings()" 
+                class="absolute top-0 right-0 p-3 bg-white hover:bg-slate-50 rounded-xl shadow-md border border-slate-200 transition-all hover:shadow-lg"
+                title="设置"
+            >
+                <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <!-- API状态指示点 -->
+                <span id="apiStatusDot" class="hidden absolute top-2 right-2 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>
+            </button>
         </div>
 
-        <!-- API密钥配置 -->
-        <div class="bg-white rounded-2xl shadow-md p-6 mb-6 fade-in">
-            <div class="flex items-center gap-3 mb-4">
-                <span class="text-2xl">🔑</span>
-                <h2 class="text-lg font-semibold text-slate-700">DeepSeek API 配置</h2>
-            </div>
-            <div class="flex gap-3">
-                <input 
-                    type="password" 
-                    id="apiKey" 
-                    placeholder="请输入您的 DeepSeek API 密钥 (sk-...)" 
-                    class="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
-                >
-                <button 
-                    onclick="saveApiKey()" 
-                    class="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors"
-                >
-                    保存
-                </button>
-            </div>
-            <p class="text-sm text-slate-400 mt-2">
-                💡 密钥仅保存在本地浏览器中，用于直接调用DeepSeek AI服务。系统不会收集您的密钥信息。
-                <a href="https://platform.deepseek.com/api_keys" target="_blank" class="text-sky-500 hover:underline">获取API密钥 →</a>
-            </p>
-        </div>
-
-        <!-- API密钥状态 -->
-        <div id="apiStatus" class="hidden mb-6">
-            <div class="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <span class="text-emerald-500">✓</span>
-                <span class="text-emerald-700 text-sm font-medium">API密钥已配置</span>
+        <!-- 设置弹窗 (Modal) -->
+        <div id="settingsModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all">
+                <!-- 弹窗头部 -->
+                <div class="flex items-center justify-between p-6 border-b border-slate-100">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">⚙️</span>
+                        <h2 class="text-lg font-semibold text-slate-700">API 配置</h2>
+                    </div>
+                    <button 
+                        onclick="closeSettings()" 
+                        class="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <!-- 弹窗内容 -->
+                <div class="p-6">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-600 mb-2">DeepSeek API 密钥</label>
+                        <input 
+                            type="password" 
+                            id="apiKey" 
+                            placeholder="请输入您的 DeepSeek API 密钥 (sk-...)" 
+                            class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
+                        >
+                    </div>
+                    <p class="text-sm text-slate-400 mb-4">
+                        💡 密钥仅保存在本地浏览器中，用于直接调用DeepSeek AI服务。系统不会收集您的密钥信息。
+                        <a href="https://platform.deepseek.com/api_keys" target="_blank" class="text-sky-500 hover:underline">获取API密钥 →</a>
+                    </p>
+                    <button 
+                        onclick="saveApiKey()" 
+                        class="w-full py-3 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-sky-500/25"
+                    >
+                        保存配置
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -366,7 +390,45 @@ TMT热成像检查报告
             if (savedKey) {
                 document.getElementById('apiKey').value = savedKey;
                 deepseekApiKey = savedKey;
-                updateApiStatus(true);
+                updateApiStatusDot(true);
+            }
+        }
+
+        // 打开设置弹窗
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.remove('hidden');
+            // 重新加载当前保存的密钥以确保input显示正确
+            const savedKey = localStorage.getItem('deepseek_api_key');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+            }
+        }
+
+        // 关闭设置弹窗
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.add('hidden');
+        }
+
+        // 点击弹窗背景关闭
+        document.getElementById('settingsModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('settingsModal')) {
+                closeSettings();
+            }
+        });
+
+        // 更新API状态小圆点
+        function updateApiStatusDot(hasKey) {
+            const dotEl = document.getElementById('apiStatusDot');
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            
+            if (hasKey && deepseekApiKey) {
+                dotEl.classList.remove('hidden');
+                analyzeBtn.disabled = false;
+            } else {
+                dotEl.classList.add('hidden');
+                analyzeBtn.disabled = true;
             }
         }
 
@@ -386,8 +448,10 @@ TMT热成像检查报告
             
             localStorage.setItem('deepseek_api_key', key);
             deepseekApiKey = key;
-            updateApiStatus(true);
+            updateApiStatusDot(true);
             showToast('API密钥已保存', 'success');
+            // 保存后自动关闭弹窗
+            setTimeout(closeSettings, 500);
         }
 
         // 更新API状态显示
@@ -407,7 +471,7 @@ TMT热成像检查报告
         // 监听API密钥输入
         document.getElementById('apiKey').addEventListener('input', (e) => {
             deepseekApiKey = e.target.value.trim();
-            updateApiStatus(deepseekApiKey.length > 0);
+            updateApiStatusDot(deepseekApiKey.length > 0);
         });
 
         // 选择分析类型
@@ -551,8 +615,8 @@ TMT热成像检查报告
         async function startAnalysis() {
             // 验证API密钥
             if (!deepseekApiKey) {
-                showToast('请先配置DeepSeek API密钥', 'error');
-                document.getElementById('apiKey').focus();
+                showToast('请先配置API密钥', 'error');
+                openSettings(); // 自动打开设置弹窗
                 return;
             }
 
